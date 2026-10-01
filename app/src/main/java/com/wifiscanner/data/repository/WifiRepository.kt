@@ -2,6 +2,7 @@ package com.wifiscanner.data.repository
 
 import com.wifiscanner.data.model.NetworkInfo
 import com.wifiscanner.data.model.PasswordStrength
+import com.wifiscanner.data.model.PasswordTestSession
 import com.wifiscanner.data.model.SecurityReport
 import kotlin.math.max
 import kotlin.random.Random
@@ -36,7 +37,7 @@ class WifiRepository {
             channel = 11,
             encryptionType = "WEP",
             isLegacySecurity = true,
-            notes = "شبكة قديمة تستخدم بروتوكول WEP، وهو غير آمن ويحتاج إلى تحديث." 
+            notes = "شبكة قديمة تستخدم بروتوكول WEP، وهو غير آمن ويحتاج إلى تحديث."
         ),
         NetworkInfo(
             ssid = "OfficeNet",
@@ -46,7 +47,7 @@ class WifiRepository {
             channel = 36,
             encryptionType = "AES",
             isLegacySecurity = false,
-            notes = "شبكة مهنية تستعمل أحدث معايير الأمان المناسبة." 
+            notes = "شبكة مهنية تستعمل أحدث معايير الأمان المناسبة."
         )
     )
 
@@ -116,5 +117,59 @@ class WifiRepository {
             total == 4 -> PasswordStrength.STRONG
             else -> PasswordStrength.VERY_STRONG
         }
+    }
+
+    fun createWordlistSample(size: Int = 2000): List<String> {
+        val baseWords = listOf(
+            "admin", "password", "welcome", "qwerty", "wifi123", "network",
+            "router", "homewifi", "office", "security", "guest", "master",
+            "internet", "admin123", "pass123", "secret", "hello", "world",
+            "letmein", "sunshine", "football", "dragon", "company", "service",
+            "wifi", "default", "pass", "support", "manager", "system",
+            "test", "android", "mobile", "family", "user", "root", "login"
+        )
+
+        val result = mutableListOf<String>()
+        repeat(size) { index ->
+            val word = baseWords[index % baseWords.size]
+            val suffix = when {
+                index % 7 == 0 -> "123"
+                index % 5 == 0 -> "2024"
+                index % 3 == 0 -> "!"
+                else -> ""
+            }
+            result.add("${word}$suffix")
+        }
+        return result
+    }
+
+    fun runPasswordWordTest(targetWord: String, wordlist: List<String>, maxAttempts: Int = 10000): PasswordTestSession {
+        val start = System.currentTimeMillis()
+        var matchesFound = 0
+        var matchedWord: String? = null
+        var attempts = 0
+
+        for (word in wordlist) {
+            if (attempts >= maxAttempts) break
+            attempts += 1
+            if (word.equals(targetWord, ignoreCase = true)) {
+                matchedWord = word
+                matchesFound += 1
+                break
+            }
+        }
+
+        val elapsed = System.currentTimeMillis() - start
+        val wordsPerMinute = if (elapsed > 0) (attempts.toDouble() / elapsed.toDouble()) * 60000.0 else 0.0
+
+        return PasswordTestSession(
+            targetWord = targetWord,
+            wordlist = wordlist,
+            attempts = attempts,
+            elapsedMillis = elapsed,
+            matchesFound = matchesFound,
+            wordsPerMinute = wordsPerMinute,
+            matchedWord = matchedWord
+        )
     }
 }

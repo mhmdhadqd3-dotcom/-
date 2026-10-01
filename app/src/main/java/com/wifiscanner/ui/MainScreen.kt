@@ -9,25 +9,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NetworkWifi
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Password
-import androidx.compose.material.icons.filled.Report
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SignalCellularAlt
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -50,7 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -69,18 +63,15 @@ fun WifiScannerApp() {
     var securityReport by remember { mutableStateOf<SecurityReport?>(null) }
     var passwordText by remember { mutableStateOf("P@ssw0rd!") }
     var passwordStrength by remember { mutableStateOf(repository.evaluatePassword(passwordText)) }
-    var testWord by remember { mutableStateOf("admin") }
+    var targetWord by remember { mutableStateOf("admin") }
+    var wordlistSample by remember { mutableStateOf(repository.createWordlistSample(5000)) }
     var attempts by remember { mutableStateOf(0) }
     var elapsedTime by remember { mutableStateOf("0.00s") }
     var matchedWord by remember { mutableStateOf<String?>(null) }
+    var wordsPerMinute by remember { mutableStateOf("0") }
+    var totalWordCount by remember { mutableStateOf(5000) }
     var testHistory by remember {
-        mutableStateOf(
-            listOf(
-                "WPA2 Audit Started",
-                "Password Strength Reviewed",
-                "Security Report Created"
-            )
-        )
+        mutableStateOf(listOf("WPA2 Audit Started", "Password Strength Reviewed", "Security Report Created"))
     }
 
     val currentTheme = if (darkMode) androidx.compose.material3.darkColorScheme() else androidx.compose.material3.lightColorScheme()
@@ -145,21 +136,25 @@ fun WifiScannerApp() {
                                 passwordStrength = repository.evaluatePassword(passwordText)
                             },
                             passwordStrength = passwordStrength,
-                            testWord = testWord,
-                            onTestWordChange = { testWord = it },
+                            targetWord = targetWord,
+                            onTargetWordChange = { targetWord = it },
                             attempts = attempts,
-                            onAttemptsChange = { attempts = it },
                             elapsedTime = elapsedTime,
-                            onElapsedTimeChange = { elapsedTime = it },
+                            wordsPerMinute = wordsPerMinute,
                             matchedWord = matchedWord,
+                            totalWordCount = totalWordCount,
                             onRunWordTest = {
-                                attempts += 1
-                                matchedWord = if (testWord.isNotBlank()) {
-                                    val result = listOf("admin", "password", "welcome", "wifi123", testWord)
-                                        .firstOrNull { it.equals(testWord, true) }
-                                    if (result != null) testWord else null
-                                } else null
-                                elapsedTime = "${(1..5).random()}. ${(10..99).random()}s"
+                                val session = repository.runPasswordWordTest(targetWord, wordlistSample, 20000)
+                                attempts = session.attempts
+                                elapsedTime = "${String.format("%.2f", session.elapsedMillis / 1000.0)}s"
+                                wordsPerMinute = String.format("%.0f", session.wordsPerMinute)
+                                matchedWord = session.matchedWord
+                                totalWordCount = wordlistSample.size
+                                testHistory = listOf("WordList Test Ran", *testHistory.toTypedArray())
+                            },
+                            onLoadWordlist = {
+                                wordlistSample = repository.createWordlistSample(5000)
+                                totalWordCount = wordlistSample.size
                             }
                         )
 
@@ -298,14 +293,15 @@ private fun ToolsScreen(
     onPasswordChange: (String) -> Unit,
     onGenerate: () -> Unit,
     passwordStrength: PasswordStrength,
-    testWord: String,
-    onTestWordChange: (String) -> Unit,
+    targetWord: String,
+    onTargetWordChange: (String) -> Unit,
     attempts: Int,
-    onAttemptsChange: (Int) -> Unit,
     elapsedTime: String,
-    onElapsedTimeChange: (String) -> Unit,
+    wordsPerMinute: String,
     matchedWord: String?,
-    onRunWordTest: () -> Unit
+    totalWordCount: Int,
+    onRunWordTest: () -> Unit,
+    onLoadWordlist: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -338,19 +334,24 @@ private fun ToolsScreen(
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Password Lab")
                 OutlinedTextField(
-                    value = testWord,
-                    onValueChange = onTestWordChange,
+                    value = targetWord,
+                    onValueChange = onTargetWordChange,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(onClick = onRunWordTest) {
-                        Text("Test Word")
+                        Text("Test 1000+ Words")
                     }
-                    Text("Attempts: $attempts")
+                    Button(onClick = onLoadWordlist) {
+                        Text("Load List")
+                    }
                 }
-                Text("Elapsed Time: $elapsedTime")
-                matchedWord?.let { Text("Matched: $it") }
+                Text("Attempts: $attempts")
+                Text("Time: $elapsedTime")
+                Text("Rate: $wordsPerMinute words/min")
+                Text("Wordlist Size: $totalWordCount")
+                matchedWord?.let { Text("Matched: $it") } ?: Text("No match found in current test list.")
             }
         }
     }
